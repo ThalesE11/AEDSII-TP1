@@ -12,6 +12,7 @@
 #include "particoes.h"
 #include "intercalacao.h"
 #include "arvore_binaria.h"
+#include "manipulacao_arquivos.h"
 
 int menu(){
     int op;
@@ -143,20 +144,25 @@ int main(){
                     vetPilhas = (TPilha **) malloc(sizeof(TPilha *) * (nParticoes));
                     vetTopo = (int *) malloc(sizeof(int) * (nParticoes));
                     for(int p = 0 ; p < nParticoes ; p++){
-                        //alocando a memória para salvar uma pilha para cada particao
-                        vetPilhas[p] = (TPilha *) malloc(sizeof(TPilha) * (nElementos));
-                        //abrindo primeira partição para leitura
+                        //abrindo a partição para leitura
                         FILE *part = fopen(nomes->nome, "rb+");
                         printf("Partição %s \n", nomes->nome);
                         nomes = nomes->prox;
-                        //imprimindo os funcionários gravados nas partições
-                        imprime_base_dados_funcionarios(part, nElementos);
                         //inicializando os topos das pilhas
                         vetTopo[p] = -1;
-                        //criando pilha através da leitura da partição
-                        cria_pilha_particao(vetPilhas[p], part, nElementos, &vetTopo[p],p);
-                        //fechando a partição
-                        fclose(part);
+                        //com seleção natural a partição pode ter mais (ou menos) que nElementos registros,
+                        //então o tamanho da pilha é a quantidade real de registros da partição
+                        int tamPart = (part != NULL) ? tamanho_arquivo(part) : 0;
+                        vetPilhas[p] = (TPilha *) malloc(sizeof(TPilha) * (tamPart > 0 ? tamPart : 1));
+                        if (part != NULL) {
+                            //imprimindo os funcionários gravados nas partições
+                            imprime_base_dados_funcionarios(part, tamPart);
+                            //criando pilha através da leitura da partição
+                            if (tamPart > 0)
+                                cria_pilha_particao(vetPilhas[p], part, tamPart, &vetTopo[p], p);
+                            //fechando a partição
+                            fclose(part);
+                        }
                     }
                     crioupilhas = 1;
                     nomes = prox;

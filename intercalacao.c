@@ -85,7 +85,83 @@ void intercalacao_basico(char *nome_arquivo_saida, int num_p, Lista *nome_partic
     }
 }
 
-void intercalacao_arvore_de_vencedores(TPilha **pilha, int *vetTop, char *nome_arquivo_saida, int num_p){
-    //implementar primeira parte do trabalho
+/* ------------------------------------------------------------------
+   INTERCALACAO COM ARVORE BINARIA DE VENCEDORES
+   ------------------------------------------------------------------
+   A arvore e guardada em um vetor (como um heap):
+     - raiz no indice 1
+     - filhos do no i: 2*i (esq) e 2*i+1 (dir)
+     - folhas nos indices [folhas, 2*folhas-1]  (folhas = potencia de 2 >= num_p)
+   Cada no e um TPilha {info, p}: info = registro vencedor, p = particao de origem.
+   info == NULL significa HIGH VALUE (particao esgotada ou folha de enchimento). */
+
+/* devolve o vencedor (menor chave) entre dois nos */
+static TPilha vencedor(TPilha a, TPilha b) {
+    if (a.info == NULL) return b;
+    if (b.info == NULL) return a;
+    return (a.info->cod <= b.info->cod) ? a : b;
 }
 
+void intercalacao_arvore_de_vencedores(TPilha **pilha, int *vetTop, char *nome_arquivo_saida, int num_p){
+    if (pilha == NULL || vetTop == NULL || num_p <= 0) {
+        printf("Nao ha pilhas para intercalar.\n");
+        return;
+    }
+
+    FILE *out = fopen(nome_arquivo_saida, "wb");
+    if (out == NULL) {
+        printf("Erro ao abrir arquivo de saida\n");
+        return;
+    }
+
+    //1. numero de folhas = menor potencia de 2 que comporta as num_p particoes
+    int folhas = 1;
+    while (folhas < num_p) folhas *= 2;
+
+    TPilha *arv = (TPilha *) malloc(sizeof(TPilha) * 2 * folhas);
+    if (arv == NULL) {
+        printf("Erro de alocacao da arvore de vencedores\n");
+        fclose(out);
+        return;
+    }
+
+    //2. preenche as folhas com o primeiro registro (topo) de cada pilha
+    for (int i = 0; i < folhas; i++) {
+        TPilha *folha = &arv[folhas + i];
+        folha->info = NULL;      //HIGH VALUE
+        folha->p = -1;
+        if (i < num_p) {
+            folha->info = pop(pilha[i], 0, &vetTop[i]); //NULL se a pilha estiver vazia
+            folha->p = i;
+        }
+    }
+
+    //3. monta os nos internos de baixo para cima (cada no guarda o vencedor dos filhos)
+    for (int i = folhas - 1; i >= 1; i--)
+        arv[i] = vencedor(arv[2 * i], arv[2 * i + 1]);
+
+    //4. enquanto a raiz tiver registro, ele e o menor de todos
+    int gravados = 0;   //posicao (em registros) do proximo registro no arquivo de saida
+    while (arv[1].info != NULL) {
+        TFunc *menor = arv[1].info;
+        int p = arv[1].p;
+
+        //salva_funcionario grava campo a campo (sem o padding do struct), por isso
+        //posiciona com fseek usando tamanho_registro(), igual ao restante do projeto
+        fseek(out, gravados * tamanho_registro(), SEEK_SET);
+        salva_funcionario(menor, out);
+        gravados++;
+        free(menor);
+
+        //repoe a folha da particao vencedora com o proximo registro da pilha
+        int pos = folhas + p;
+        arv[pos].info = pop(pilha[p], 0, &vetTop[p]); //NULL se esgotou
+
+        //refaz somente o caminho dessa folha ate a raiz (log2 das folhas comparacoes)
+        for (pos = pos / 2; pos >= 1; pos /= 2)
+            arv[pos] = vencedor(arv[2 * pos], arv[2 * pos + 1]);
+    }
+
+    free(arv);
+    fclose(out);
+}
